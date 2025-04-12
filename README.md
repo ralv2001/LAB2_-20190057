@@ -1,2 +1,2 @@
-# LAB2_-20190057
+# LAB2_20190057
 este es mi laboratorio 2 :)
