@@ -1,4 +1,4 @@
-# LAB2_20190057 - **RICARDO ALVARADO RUZI**
+# LAB2_20190057 - **RICARDO ALVARADO RUIZ**
 Este es mi laboratorio 2 :)
 
 ## **Información del Proyecto:**
