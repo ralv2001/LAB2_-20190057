@@ -33,17 +33,22 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intentRedes);
         });
 
+        // Llamamos al botón desde la vista xml
         Button btnCiberSeguridad = findViewById(R.id.btnCiberSeguridad);
+        // Acción para cuando le doy click al botón
         btnCiberSeguridad.setOnClickListener( view -> {
             Toast.makeText(this, "Botón CiberSeguridad", Toast.LENGTH_SHORT).show();
             Intent intentCiberSeguridad = new Intent(getApplicationContext(), JuegoCiberSeguridad.class);
             startActivity(intentCiberSeguridad);
         });
 
+        // Llamamos al botón desde la vista xml
         Button btnMicroondas = findViewById(R.id.btnMicroondas);
+        // Acción para cuando le doy click al botón
         btnMicroondas.setOnClickListener( view -> {
             Toast.makeText(this, "Botón Microondas", Toast.LENGTH_SHORT).show();
+            Intent intentMicroondas = new Intent(getApplicationContext(), JuegoMicroondas.class);
+            startActivity(intentMicroondas);
         });
-
     }
 }
