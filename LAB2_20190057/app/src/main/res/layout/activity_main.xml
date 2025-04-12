@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity"
+    android:orientation="vertical"
+    android:background="@color/white"
+    android:gravity="center_horizontal">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:background="@color/defaultBgToolbarMain"
+        android:padding="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="APPSIoT - Lab 2"
+            android:textColor="@color/white"
+            android:textSize="20sp"/>
+
+    </LinearLayout>
+
+
+    <LinearLayout
+        android:layout_width="350dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="BIENVENIDO"
+            android:textSize="24sp"
+            android:gravity="center_horizontal"/>
+
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="350dp"
+            android:src="@drawable/red_icon"/>
+
+        <Button
+            android:id="@+id/btnRedes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Redes"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btnCiberSeguridad"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="CiberSeguridad"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/btnMicroondas"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Microondas"/>
+
+    </LinearLayout>
+
+</LinearLayout>
