@@ -1,14 +1,15 @@
 package com.example.myapplication;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -23,6 +24,29 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class JuegoCiberSeguridad extends AppCompatActivity {
 
+    private HashMap<Integer, String> preguntas;
+    private HashMap<Integer, String> respuestas;
+    private ArrayList<Integer> indices;
+    private ArrayList<ArrayList<String>> listaCompletaOpciones;
+    private ArrayList<Integer> respuestasUsuario;
+    private AtomicInteger currentIndexQuestion;
+    private AtomicInteger optionSelected;
+    private long tiempoInicio;
+    private boolean juegoCompletado = false;
+    private boolean estadisticaGuardada = false;
+    private boolean mostrandoResultado = false;
+
+    // Variables para guardar el estado del juego
+    private static final String ESTADO_JUEGO = "estado_juego_ciber";
+    private static boolean hayEstadoGuardado = false;
+    private static int indexPreguntaGuardada = 0;
+    private static ArrayList<Integer> respuestasGuardadas = new ArrayList<>();
+    private static int puntajeGuardado = 0;
+    private static long tiempoInicioGuardado = 0;
+    private static boolean juegoCompletadoGuardado = false;
+    private static boolean estadisticaGuardadaFlag = false;
+    private static boolean mostrandoResultadoGuardado = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -34,15 +58,38 @@ public class JuegoCiberSeguridad extends AppCompatActivity {
             return insets;
         });
 
+        // Configurar el botón para ir a la pantalla principal (cancelar juego)
         ImageButton goBack = findViewById(R.id.btnToMain);
         goBack.setOnClickListener(view -> {
+            // Guardar estadística de juego cancelado solo si no se ha completado y no es un juego ya terminado
+            if (!juegoCompletado && !estadisticaGuardada) {
+                SharedPreferences prefs = getSharedPreferences("TeleQuizStats", MODE_PRIVATE);
+                Estadisticas.guardarEstadistica(prefs, "CiberSeguridad", false, 0, 0);
+                estadisticaGuardada = true;
+            }
+
+            // Limpiar estado guardado
+            hayEstadoGuardado = false;
+
+            // Volver a la pantalla principal
             Intent intent = new Intent(getApplicationContext(), MainActivity.class);
+            startActivity(intent);
+            finish(); // Cerrar esta actividad
+        });
+
+        // Configurar botón para ver estadísticas
+        ImageButton btnStats = findViewById(R.id.btnToStatistics);
+        btnStats.setOnClickListener(view -> {
+            // Guardar estado actual del juego
+            guardarEstadoJuego();
+
+            Intent intent = new Intent(getApplicationContext(), Estadisticas.class);
+            intent.putExtra("origin", this.getClass().getName());
             startActivity(intent);
         });
 
-        // ACTUALIZACIÓN DE PREGUNTA EN LA VISTA
-        // Lista de preguntas
-        HashMap<Integer, String> preguntas = new HashMap<>();
+        // INICIALIZACIÓN DE DATOS
+        preguntas = new HashMap<>();
         preguntas.put(0, "¿Qué es un Ransomware?");
         preguntas.put(1, "¿Cuál es el objetivo del phishing?");
         preguntas.put(2, "¿Qué protocolo cifra las comunicaciones web?");
@@ -50,33 +97,31 @@ public class JuegoCiberSeguridad extends AppCompatActivity {
         preguntas.put(4, "¿Para qué sirve un firewall?");
 
         // Lista de respuestas correctas
-        HashMap<Integer, String> respuestas = new HashMap<>();
-        respuestas.put(0, "Malware de secuestro");
-        respuestas.put(1, "Robar credenciales");
+        respuestas = new HashMap<>();
+        respuestas.put(0, "Malware que secuestra datos");
+        respuestas.put(1, "Robar información personal");
         respuestas.put(2, "HTTPS");
         respuestas.put(3, "RSA");
-        respuestas.put(4, "Filtrar tráfico");
+        respuestas.put(4, "Bloquear accesos no autorizados");
 
-        // Lista de indices aleatorios
-        ArrayList<Integer> indices = new ArrayList<>(preguntas.keySet());
-        Collections.shuffle(indices); // Mezcla los índices aleatoriamente
+        // Comprobar si venimos de estadísticas y tenemos un estado guardado
+        boolean fromStats = getIntent().getBooleanExtra("fromStats", false);
 
-        // Tabla de opciones aleatorias para cada pregunta
-        ArrayList<ArrayList<String>> listaCompletaOpciones = getListaCompletaOpciones(indices);
+        if (fromStats && hayEstadoGuardado) {
+            // Restaurar estado del juego guardado
+            restaurarEstadoJuego();
+        } else {
+            // Iniciar nuevo juego
+            iniciarNuevoJuego();
+        }
 
-        AtomicInteger currentIndexQuestion = new AtomicInteger(0);
-        updateQuestion(preguntas, listaCompletaOpciones.get(currentIndexQuestion.get()), indices, currentIndexQuestion.get(), 0);
-        // END ACTUALIZACIÓN DE PREGUNTA EN LA VISTA
-
-        AtomicInteger optionSelected = new AtomicInteger(-1);
         Button btnOpcion1 = findViewById(R.id.btnOpcion1Ciber);
         Button btnOpcion2 = findViewById(R.id.btnOpcion2Ciber);
         Button btnOpcion3 = findViewById(R.id.btnOpcion3Ciber);
         Button btnSiguiente = findViewById(R.id.btnSiguienteCiber);
         Button btnAnterior = findViewById(R.id.btnAnteriorCiber);
 
-        // Lista de Respuestas del usuario
-        ArrayList<Integer> respuestasUsuario = new ArrayList<>();
+        // Configurar listeners para botones de opciones
         btnOpcion1.setOnClickListener(view -> {
             // Corroboramos respuesta
             String respuestaCorrecta = respuestas.get(indices.get(currentIndexQuestion.get()));
@@ -167,6 +212,7 @@ public class JuegoCiberSeguridad extends AppCompatActivity {
             LinearLayout layoutResultado = findViewById(R.id.layoutResultadoCiber);
             if (layoutResultado.getVisibility() == View.VISIBLE) {
                 layoutResultado.setVisibility(View.GONE);
+                mostrandoResultado = false;
 
                 TextView textoPregunta = findViewById(R.id.textoPreguntaCiber);
                 textoPregunta.setVisibility(View.VISIBLE);
@@ -238,6 +284,133 @@ public class JuegoCiberSeguridad extends AppCompatActivity {
         });
     }
 
+    private void iniciarNuevoJuego() {
+        // Reiniciar variables
+        if (!hayEstadoGuardado) {
+            // Solo reiniciar estas variables si no hay un estado guardado
+            juegoCompletado = false;
+            estadisticaGuardada = false;
+            mostrandoResultado = false;
+
+            // Iniciar nuevo cronómetro
+            tiempoInicio = SystemClock.elapsedRealtime();
+
+            // Generar preguntas aleatorias
+            indices = new ArrayList<>(preguntas.keySet());
+            Collections.shuffle(indices); // Mezcla los índices aleatoriamente
+
+            // Generar opciones para cada pregunta
+            listaCompletaOpciones = getListaCompletaOpciones(indices);
+
+            // Inicializar variables del juego
+            currentIndexQuestion = new AtomicInteger(0);
+            optionSelected = new AtomicInteger(-1);
+            respuestasUsuario = new ArrayList<>();
+
+            // Mostrar primera pregunta
+            updateQuestion(preguntas, listaCompletaOpciones.get(currentIndexQuestion.get()), indices, currentIndexQuestion.get(), 0);
+
+            // Resetear el puntaje
+            TextView textoPuntaje = findViewById(R.id.textoPuntajeCiber);
+            textoPuntaje.setText("0");
+        }
+    }
+
+    private void guardarEstadoJuego() {
+        hayEstadoGuardado = true;
+        indexPreguntaGuardada = currentIndexQuestion.get();
+        respuestasGuardadas = new ArrayList<>(respuestasUsuario);
+
+        TextView textoPuntaje = findViewById(R.id.textoPuntajeCiber);
+        puntajeGuardado = Integer.parseInt(textoPuntaje.getText().toString());
+
+        tiempoInicioGuardado = tiempoInicio;
+        juegoCompletadoGuardado = juegoCompletado;
+        estadisticaGuardadaFlag = estadisticaGuardada;
+        mostrandoResultadoGuardado = mostrandoResultado;
+    }
+
+    private void restaurarEstadoJuego() {
+        // Restaurar variables de control
+        juegoCompletado = juegoCompletadoGuardado;
+        estadisticaGuardada = estadisticaGuardadaFlag;
+        mostrandoResultado = mostrandoResultadoGuardado;
+
+        // Restaurar preguntas y opciones
+        indices = new ArrayList<>(preguntas.keySet());
+        listaCompletaOpciones = getListaCompletaOpciones(indices);
+
+        // Restaurar estado del juego
+        currentIndexQuestion = new AtomicInteger(indexPreguntaGuardada);
+        optionSelected = new AtomicInteger(-1);
+        respuestasUsuario = new ArrayList<>(respuestasGuardadas);
+        tiempoInicio = tiempoInicioGuardado;
+
+        // Restaurar puntaje
+        TextView textoPuntaje = findViewById(R.id.textoPuntajeCiber);
+        textoPuntaje.setText(String.valueOf(puntajeGuardado));
+
+        // Si estamos mostrando el resultado final
+        if (mostrandoResultado) {
+            mostrarResultadoSinGuardar();
+            return;
+        }
+
+        // Actualizar UI para mostrar la pregunta actual
+        updateQuestion(preguntas, listaCompletaOpciones.get(currentIndexQuestion.get()),
+                indices, currentIndexQuestion.get(), respuestasUsuario.size());
+
+        // Si esta pregunta ya fue respondida, mostrar la respuesta seleccionada
+        if (currentIndexQuestion.get() < respuestasUsuario.size()) {
+            Button btnOpcion1 = findViewById(R.id.btnOpcion1Ciber);
+            Button btnOpcion2 = findViewById(R.id.btnOpcion2Ciber);
+            Button btnOpcion3 = findViewById(R.id.btnOpcion3Ciber);
+
+            btnOpcion1.setEnabled(false);
+            btnOpcion2.setEnabled(false);
+            btnOpcion3.setEnabled(false);
+
+            int respuestaSeleccionada = respuestasUsuario.get(currentIndexQuestion.get());
+            String respuestaCorrecta = respuestas.get(indices.get(currentIndexQuestion.get()));
+
+            switch (respuestaSeleccionada) {
+                case 0:
+                    setBgColorBtn(btnOpcion1, btnOpcion1.getText().toString().equals(respuestaCorrecta));
+                    break;
+                case 1:
+                    setBgColorBtn(btnOpcion2, btnOpcion2.getText().toString().equals(respuestaCorrecta));
+                    break;
+                case 2:
+                    setBgColorBtn(btnOpcion3, btnOpcion3.getText().toString().equals(respuestaCorrecta));
+                    break;
+            }
+
+            // Habilitar botón siguiente
+            Button btnSiguiente = findViewById(R.id.btnSiguienteCiber);
+            btnSiguiente.setEnabled(true);
+        }
+
+        // Habilitar/deshabilitar botón anterior según corresponda
+        Button btnAnterior = findViewById(R.id.btnAnteriorCiber);
+        btnAnterior.setEnabled(currentIndexQuestion.get() > 0);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        // Si el juego se cierra sin completarse y no es por ir a estadísticas
+        // y no estamos cambiando configuración, registrar como cancelado
+        if (!juegoCompletado && !estadisticaGuardada && !isChangingConfigurations() && !hayEstadoGuardado) {
+            SharedPreferences prefs = getSharedPreferences("TeleQuizStats", MODE_PRIVATE);
+            Estadisticas.guardarEstadistica(prefs, "CiberSeguridad", false, 0, 0);
+            estadisticaGuardada = true;
+
+            // Limpiar estado guardado
+            hayEstadoGuardado = false;
+        }
+    }
+
     public ArrayList<ArrayList<String>> getListaCompletaOpciones(ArrayList<Integer> indicesAleatorios) {
         ArrayList<ArrayList<String>> listaCompletaOpciones = new ArrayList<>();
         for (int i = 0; i < indicesAleatorios.size(); i++) {
@@ -250,14 +423,14 @@ public class JuegoCiberSeguridad extends AppCompatActivity {
     public ArrayList<String> getOpciones(int indicePregunta) {
         ArrayList<String> opciones = new ArrayList<>();
         if (indicePregunta == 0) {
-            opciones.add("Malware de secuestro");
-            opciones.add("Virus común");
-            opciones.add("Software espía");
+            opciones.add("Malware que secuestra datos");
+            opciones.add("Virus que borra archivos");
+            opciones.add("Software para espiar usuarios");
         }
         if (indicePregunta == 1) {
-            opciones.add("Robar credenciales");
-            opciones.add("Instalar virus");
-            opciones.add("Crear backdoors");
+            opciones.add("Robar información personal");
+            opciones.add("Dañar computadoras");
+            opciones.add("Ralentizar conexiones");
         }
         if (indicePregunta == 2) {
             opciones.add("HTTPS");
@@ -270,8 +443,8 @@ public class JuegoCiberSeguridad extends AppCompatActivity {
             opciones.add("DES");
         }
         if (indicePregunta == 4) {
-            opciones.add("Filtrar tráfico");
-            opciones.add("Acelerar internet");
+            opciones.add("Bloquear accesos no autorizados");
+            opciones.add("Acelerar la conexión");
             opciones.add("Comprimir datos");
         }
         Collections.shuffle(opciones);
@@ -287,7 +460,7 @@ public class JuegoCiberSeguridad extends AppCompatActivity {
     ) {
         TextView textoPregunta = findViewById(R.id.textoPreguntaCiber);
         int indiceAleatorio = indicesMezclados.get(indexQuestion);
-        textoPregunta.setText(preguntas.get(indiceAleatorio));
+        textoPregunta.setText((indexQuestion + 1) + ". " + preguntas.get(indiceAleatorio));
 
         Button btnSiguiente = findViewById(R.id.btnSiguienteCiber);
         Button btnOpcion1 = findViewById(R.id.btnOpcion1Ciber);
@@ -350,7 +523,36 @@ public class JuegoCiberSeguridad extends AppCompatActivity {
         }
     }
 
+    // Método para mostrar el resultado final y guardar estadísticas
     private void mostrarResultadoFinal() {
+        mostrandoResultado = true;
+
+        // Solo guardar estadística la primera vez que se muestra el resultado
+        if (!estadisticaGuardada) {
+            juegoCompletado = true;
+            estadisticaGuardada = true;
+
+            // Calcular tiempo de juego
+            long tiempoFin = SystemClock.elapsedRealtime();
+            int tiempoTotal = (int)((tiempoFin - tiempoInicio) / 1000); // Convertir a segundos
+
+            // Obtener puntaje final
+            TextView textoPuntaje = findViewById(R.id.textoPuntajeCiber);
+            int puntajeFinal = Integer.parseInt(textoPuntaje.getText().toString());
+
+            // Guardar estadística
+            SharedPreferences prefs = getSharedPreferences("TeleQuizStats", MODE_PRIVATE);
+            Estadisticas.guardarEstadistica(prefs, "CiberSeguridad", true, tiempoTotal, puntajeFinal);
+        }
+
+        // Mostrar el resultado en la UI
+        mostrarResultadoSinGuardar();
+    }
+
+    // Método para mostrar el resultado sin guardar estadísticas (para revisión)
+    private void mostrarResultadoSinGuardar() {
+        mostrandoResultado = true;
+
         // Ocultar preguntas y opciones
         TextView textoPregunta = findViewById(R.id.textoPreguntaCiber);
         Button btnOpcion1 = findViewById(R.id.btnOpcion1Ciber);

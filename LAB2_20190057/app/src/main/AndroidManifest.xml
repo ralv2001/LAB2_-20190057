@@ -13,10 +13,10 @@
         android:theme="@style/Theme.MyApplication"
         tools:targetApi="31">
         <activity
-            android:name=".JuegoMicroondas"
+            android:name=".Estadisticas"
             android:exported="false" />
         <activity
-            android:name=".ResultadoJuego"
+            android:name=".JuegoMicroondas"
             android:exported="false" />
         <activity
             android:name=".JuegoCiberSeguridad"

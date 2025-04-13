@@ -1,14 +1,15 @@
 package com.example.myapplication;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -17,12 +18,34 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class JuegoRedes extends AppCompatActivity {
+
+    private HashMap<Integer, String> preguntas;
+    private HashMap<Integer, String> respuestas;
+    private ArrayList<Integer> indices;
+    private ArrayList<ArrayList<String>> listaCompletaOpciones;
+    private ArrayList<Integer> respuestasUsuario;
+    private AtomicInteger currentIndexQuestion;
+    private AtomicInteger optionSelected;
+    private long tiempoInicio;
+    private boolean juegoCompletado = false;
+    private boolean estadisticaGuardada = false;
+    private boolean mostrandoResultado = false;
+
+    // Variables para guardar el estado del juego
+    private static final String ESTADO_JUEGO = "estado_juego_redes";
+    private static boolean hayEstadoGuardado = false;
+    private static int indexPreguntaGuardada = 0;
+    private static ArrayList<Integer> respuestasGuardadas = new ArrayList<>();
+    private static int puntajeGuardado = 0;
+    private static long tiempoInicioGuardado = 0;
+    private static boolean juegoCompletadoGuardado = false;
+    private static boolean estadisticaGuardadaFlag = false;
+    private static boolean mostrandoResultadoGuardado = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,53 +58,69 @@ public class JuegoRedes extends AppCompatActivity {
             return insets;
         });
 
+        // Configurar el botón para ir a la pantalla principal (cancelar juego)
         ImageButton goBack = findViewById(R.id.btnToMain);
         goBack.setOnClickListener(view -> {
+            // Guardar estadística de juego cancelado solo si no se ha completado y no es un juego ya terminado
+            if (!juegoCompletado && !estadisticaGuardada) {
+                SharedPreferences prefs = getSharedPreferences("TeleQuizStats", MODE_PRIVATE);
+                Estadisticas.guardarEstadistica(prefs, "Redes", false, 0, 0);
+                estadisticaGuardada = true;
+            }
+
+            // Limpiar estado guardado
+            hayEstadoGuardado = false;
+
+            // Volver a la pantalla principal
             Intent intent = new Intent(getApplicationContext(), MainActivity.class);
+            startActivity(intent);
+            finish(); // Cerrar esta actividad
+        });
+
+        // Configurar botón para ver estadísticas
+        ImageButton btnStats = findViewById(R.id.btnToStatistics);
+        btnStats.setOnClickListener(view -> {
+            // Guardar estado actual del juego
+            guardarEstadoJuego();
+
+            Intent intent = new Intent(getApplicationContext(), Estadisticas.class);
+            intent.putExtra("origin", this.getClass().getName());
             startActivity(intent);
         });
 
-        // ACTUALIZACIÓN DE PREGUNTA EN LA VISTA
-        // Lista de preguntas
-        HashMap<Integer, String> preguntas = new HashMap<>();
+        // INICIALIZACIÓN DE DATOS
+        preguntas = new HashMap<>();
         preguntas.put(0, "¿Qué protocolo se utiliza para cargar páginas web?");
         preguntas.put(1, "¿Cuál de estas es una dirección IP privada?");
         preguntas.put(2, "¿Qué dispositivo conecta redes diferentes y dirige el tráfico?");
         preguntas.put(3, "¿Qué significa DNS?");
         preguntas.put(4, "¿Qué tipo de red cubre un área pequeña, como una oficina?");
-        // Lista de respuestas
-        HashMap<Integer, String> respuestas = new HashMap<>();
+
+        respuestas = new HashMap<>();
         respuestas.put(0, "HTTP");
         respuestas.put(1, "192.168.1.1");
         respuestas.put(2, "Router");
         respuestas.put(3, "Domain Name System");
         respuestas.put(4, "LAN");
 
-        // Lista de indices aleatorios
-        // [4, 2, 1, 3, 0]
-        ArrayList<Integer> indices = new ArrayList<>(preguntas.keySet());
-        Collections.shuffle(indices); // Mezcla los índices aleatoriamente
-        // Tabla de opciones ya aleatorios
-        // [ ["MAN", "LAN", "WAN"],
-        //   ["Router", "Firewall", "Switch"],
-        //   ["192.0.0.0", "162.1.0.1", "10.0.3.9"],
-        //   ["Domain Name Server", "Domain Name System", "Dynamic Name Service"],
-        //   ["FTP", "HTTP", "SMTP"]]
-        ArrayList<ArrayList<String>> listaCompletaOpciones = getListaCompletaOpciones(indices);
+        // Comprobar si venimos de estadísticas y tenemos un estado guardado
+        boolean fromStats = getIntent().getBooleanExtra("fromStats", false);
 
-        AtomicInteger currentIndexQuestion = new AtomicInteger(0);
-        updateQuestion(preguntas, listaCompletaOpciones.get(currentIndexQuestion.get()), indices, currentIndexQuestion.get(), 0);
-        // END ACTUALIZACIÓN DE PREGUNTA EN LA VISTA
+        if (fromStats && hayEstadoGuardado) {
+            // Restaurar estado del juego guardado
+            restaurarEstadoJuego();
+        } else {
+            // Iniciar nuevo juego
+            iniciarNuevoJuego();
+        }
 
-        AtomicInteger optionSelected = new AtomicInteger(-1);
         Button btnOpcion1 = findViewById(R.id.btnOpcion1Redes);
         Button btnOpcion2 = findViewById(R.id.btnOpcion2Redes);
         Button btnOpcion3 = findViewById(R.id.btnOpcion3Redes);
         Button btnSiguiente = findViewById(R.id.btnSiguienteRedes);
         Button btnAnterior = findViewById(R.id.btnAnteriorRedes);
 
-        // Lista de Respuestas del usuario
-        ArrayList<Integer> respuestasUsuario = new ArrayList<>();
+        // Configurar listeners para botones de opciones
         btnOpcion1.setOnClickListener(view -> {
             // Corroboramos respuesta
             String respuestaCorrecta = respuestas.get(indices.get(currentIndexQuestion.get()));
@@ -96,6 +135,7 @@ public class JuegoRedes extends AppCompatActivity {
             optionSelected.set(0);
             respuestasUsuario.add(optionSelected.get());
         });
+
         btnOpcion2.setOnClickListener(view -> {
             String respuestaCorrecta = respuestas.get(indices.get(currentIndexQuestion.get()));
             boolean isRespuestaCorrecta = btnOpcion2.getText().toString().equals(respuestaCorrecta);
@@ -107,10 +147,11 @@ public class JuegoRedes extends AppCompatActivity {
             optionSelected.set(1);
             respuestasUsuario.add(optionSelected.get());
         });
+
         btnOpcion3.setOnClickListener(view -> {
             String respuestaCorrecta = respuestas.get(indices.get(currentIndexQuestion.get()));
             boolean isRespuestaCorrecta = btnOpcion3.getText().toString().equals(respuestaCorrecta);
-            setBgColorBtn(btnOpcion3, btnOpcion3.getText().toString().equals(respuestaCorrecta));
+            setBgColorBtn(btnOpcion3, isRespuestaCorrecta);
             updatePuntaje(isRespuestaCorrecta);
             btnOpcion1.setEnabled(false);
             btnOpcion2.setEnabled(false);
@@ -119,12 +160,6 @@ public class JuegoRedes extends AppCompatActivity {
             respuestasUsuario.add(optionSelected.get());
         });
 
-        //btnSiguiente.setOnClickListener(view -> {
-            //if (currentIndexQuestion.get() == 4) {
-                // MOSTRAR RESULTADOS
-                //Toast.makeText(this, "FIN DEL JUEGO", Toast.LENGTH_SHORT).show();
-
-        //EMPIEZA PARTE NUEVA
         btnSiguiente.setOnClickListener(view -> {
             // Si es la última pregunta y ya tiene respuesta, mostrar resultados
             if (currentIndexQuestion.get() == 4 && respuestasUsuario.size() > 4) {
@@ -176,6 +211,7 @@ public class JuegoRedes extends AppCompatActivity {
             LinearLayout layoutResultado = findViewById(R.id.layoutResultadoRedes);
             if (layoutResultado.getVisibility() == View.VISIBLE) {
                 layoutResultado.setVisibility(View.GONE);
+                mostrandoResultado = false;
 
                 TextView textoPregunta = findViewById(R.id.textoPreguntaRedes);
                 textoPregunta.setVisibility(View.VISIBLE);
@@ -245,8 +281,133 @@ public class JuegoRedes extends AppCompatActivity {
                 btnSiguiente.setEnabled(true);
             }
         });
+    }
 
+    private void iniciarNuevoJuego() {
+        // Reiniciar variables
+        if (!hayEstadoGuardado) {
+            // Solo reiniciar estas variables si no hay un estado guardado
+            juegoCompletado = false;
+            estadisticaGuardada = false;
+            mostrandoResultado = false;
 
+            // Iniciar nuevo cronómetro
+            tiempoInicio = SystemClock.elapsedRealtime();
+
+            // Generar preguntas aleatorias
+            indices = new ArrayList<>(preguntas.keySet());
+            Collections.shuffle(indices); // Mezcla los índices aleatoriamente
+
+            // Generar opciones para cada pregunta
+            listaCompletaOpciones = getListaCompletaOpciones(indices);
+
+            // Inicializar variables del juego
+            currentIndexQuestion = new AtomicInteger(0);
+            optionSelected = new AtomicInteger(-1);
+            respuestasUsuario = new ArrayList<>();
+
+            // Mostrar primera pregunta
+            updateQuestion(preguntas, listaCompletaOpciones.get(currentIndexQuestion.get()), indices, currentIndexQuestion.get(), 0);
+
+            // Resetear el puntaje
+            TextView textoPuntaje = findViewById(R.id.textoPuntajeRedes);
+            textoPuntaje.setText("0");
+        }
+    }
+
+    private void guardarEstadoJuego() {
+        hayEstadoGuardado = true;
+        indexPreguntaGuardada = currentIndexQuestion.get();
+        respuestasGuardadas = new ArrayList<>(respuestasUsuario);
+
+        TextView textoPuntaje = findViewById(R.id.textoPuntajeRedes);
+        puntajeGuardado = Integer.parseInt(textoPuntaje.getText().toString());
+
+        tiempoInicioGuardado = tiempoInicio;
+        juegoCompletadoGuardado = juegoCompletado;
+        estadisticaGuardadaFlag = estadisticaGuardada;
+        mostrandoResultadoGuardado = mostrandoResultado;
+    }
+
+    private void restaurarEstadoJuego() {
+        // Restaurar variables de control
+        juegoCompletado = juegoCompletadoGuardado;
+        estadisticaGuardada = estadisticaGuardadaFlag;
+        mostrandoResultado = mostrandoResultadoGuardado;
+
+        // Restaurar preguntas y opciones
+        indices = new ArrayList<>(preguntas.keySet());
+        listaCompletaOpciones = getListaCompletaOpciones(indices);
+
+        // Restaurar estado del juego
+        currentIndexQuestion = new AtomicInteger(indexPreguntaGuardada);
+        optionSelected = new AtomicInteger(-1);
+        respuestasUsuario = new ArrayList<>(respuestasGuardadas);
+        tiempoInicio = tiempoInicioGuardado;
+
+        // Restaurar puntaje
+        TextView textoPuntaje = findViewById(R.id.textoPuntajeRedes);
+        textoPuntaje.setText(String.valueOf(puntajeGuardado));
+
+        // Si estamos mostrando el resultado final
+        if (mostrandoResultado) {
+            mostrarResultadoSinGuardar();
+            return;
+        }
+
+        // Actualizar UI para mostrar la pregunta actual
+        updateQuestion(preguntas, listaCompletaOpciones.get(currentIndexQuestion.get()),
+                indices, currentIndexQuestion.get(), respuestasUsuario.size());
+
+        // Si esta pregunta ya fue respondida, mostrar la respuesta seleccionada
+        if (currentIndexQuestion.get() < respuestasUsuario.size()) {
+            Button btnOpcion1 = findViewById(R.id.btnOpcion1Redes);
+            Button btnOpcion2 = findViewById(R.id.btnOpcion2Redes);
+            Button btnOpcion3 = findViewById(R.id.btnOpcion3Redes);
+
+            btnOpcion1.setEnabled(false);
+            btnOpcion2.setEnabled(false);
+            btnOpcion3.setEnabled(false);
+
+            int respuestaSeleccionada = respuestasUsuario.get(currentIndexQuestion.get());
+            String respuestaCorrecta = respuestas.get(indices.get(currentIndexQuestion.get()));
+
+            switch (respuestaSeleccionada) {
+                case 0:
+                    setBgColorBtn(btnOpcion1, btnOpcion1.getText().toString().equals(respuestaCorrecta));
+                    break;
+                case 1:
+                    setBgColorBtn(btnOpcion2, btnOpcion2.getText().toString().equals(respuestaCorrecta));
+                    break;
+                case 2:
+                    setBgColorBtn(btnOpcion3, btnOpcion3.getText().toString().equals(respuestaCorrecta));
+                    break;
+            }
+
+            // Habilitar botón siguiente
+            Button btnSiguiente = findViewById(R.id.btnSiguienteRedes);
+            btnSiguiente.setEnabled(true);
+        }
+
+        // Habilitar/deshabilitar botón anterior según corresponda
+        Button btnAnterior = findViewById(R.id.btnAnteriorRedes);
+        btnAnterior.setEnabled(currentIndexQuestion.get() > 0);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        // Si el juego se cierra sin completarse y no es por ir a estadísticas
+        // y no estamos cambiando configuración, registrar como cancelado
+        if (!juegoCompletado && !estadisticaGuardada && !isChangingConfigurations() && !hayEstadoGuardado) {
+            SharedPreferences prefs = getSharedPreferences("TeleQuizStats", MODE_PRIVATE);
+            Estadisticas.guardarEstadistica(prefs, "Redes", false, 0, 0);
+            estadisticaGuardada = true;
+
+            // Limpiar estado guardado
+            hayEstadoGuardado = false;
+        }
     }
 
     public ArrayList<ArrayList<String>> getListaCompletaOpciones(ArrayList<Integer> indicesAleatorios) {
@@ -298,7 +459,7 @@ public class JuegoRedes extends AppCompatActivity {
     ) {
         TextView textoPregunta = findViewById(R.id.textoPreguntaRedes);
         int indiceAleatorio = indicesMezclados.get(indexQuestion);
-        textoPregunta.setText(preguntas.get(indiceAleatorio));
+        textoPregunta.setText((indexQuestion + 1) + ". " + preguntas.get(indiceAleatorio));
 
         Button btnSiguiente = findViewById(R.id.btnSiguienteRedes);
         Button btnOpcion1 = findViewById(R.id.btnOpcion1Redes);
@@ -361,8 +522,36 @@ public class JuegoRedes extends AppCompatActivity {
         }
     }
 
-    //NUEVA CLASE
+    // Método para mostrar el resultado final y guardar estadísticas
     private void mostrarResultadoFinal() {
+        mostrandoResultado = true;
+
+        // Solo guardar estadística la primera vez que se muestra el resultado
+        if (!estadisticaGuardada) {
+            juegoCompletado = true;
+            estadisticaGuardada = true;
+
+            // Calcular tiempo de juego
+            long tiempoFin = SystemClock.elapsedRealtime();
+            int tiempoTotal = (int)((tiempoFin - tiempoInicio) / 1000); // Convertir a segundos
+
+            // Obtener puntaje final
+            TextView textoPuntaje = findViewById(R.id.textoPuntajeRedes);
+            int puntajeFinal = Integer.parseInt(textoPuntaje.getText().toString());
+
+            // Guardar estadística
+            SharedPreferences prefs = getSharedPreferences("TeleQuizStats", MODE_PRIVATE);
+            Estadisticas.guardarEstadistica(prefs, "Redes", true, tiempoTotal, puntajeFinal);
+        }
+
+        // Mostrar el resultado en la UI
+        mostrarResultadoSinGuardar();
+    }
+
+    // Método para mostrar el resultado sin guardar estadísticas (para revisión)
+    private void mostrarResultadoSinGuardar() {
+        mostrandoResultado = true;
+
         // Ocultar preguntas y opciones
         TextView textoPregunta = findViewById(R.id.textoPreguntaRedes);
         Button btnOpcion1 = findViewById(R.id.btnOpcion1Redes);
@@ -403,5 +592,4 @@ public class JuegoRedes extends AppCompatActivity {
         btnSiguiente.setText("Siguiente");
         btnSiguiente.setEnabled(false);
     }
-
 }
